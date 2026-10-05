@@ -1,0 +1,46 @@
+import random
+
+
+def play_game(switch: bool) -> bool:
+    """Play one round. Returns True if the player wins the prize."""
+    doors = [0, 1, 2]
+    prize = random.choice(doors)
+    pick = random.choice(doors)
+
+    # Host opens a door that is neither the player's pick nor the prize
+    host = random.choice([d for d in doors if d != pick and d != prize])
+
+    if switch:
+        pick = next(d for d in doors if d != pick and d != host)
+
+    return pick == prize
+
+
+def simulate(n_games: int = 100_000) -> None:
+    stay_wins = sum(play_game(switch=False) for _ in range(n_games))
+    switch_wins = sum(play_game(switch=True) for _ in range(n_games))
+
+    print(f"Games per strategy: {n_games:,}")
+    print(f"Stay:   {stay_wins:,} wins ({stay_wins / n_games:.1%})")
+    print(f"Switch: {switch_wins:,} wins ({switch_wins / n_games:.1%})")
+
+
+def play_interactive() -> None:
+    """Play a single round yourself in the terminal."""
+    doors = [1, 2, 3]
+    prize = random.choice(doors)
+    pick = int(input("Pick a door (1-3): "))
+
+    host = random.choice([d for d in doors if d != pick and d != prize])
+    other = next(d for d in doors if d != pick and d != host)
+    print(f"The host opens door {host} and shows a goat.")
+
+    if input(f"Switch to door {other}? (y/n): ").strip().lower() == "y":
+        pick = other
+
+    print("You win the prize!" if pick == prize else f"Goat! The prize was behind door {prize}.")
+
+
+if __name__ == "__main__":
+    simulate()
+    # play_interactive()  # uncomment to play by hand
