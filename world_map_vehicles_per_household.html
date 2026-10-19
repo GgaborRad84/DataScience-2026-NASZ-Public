@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vehicles per household around the world</title>
+<style>
+  :root { --bg:#f9f7f6; --ink:#121212; --muted:#767676; --line:#dfdcd9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font-family:"Franklin Gothic Medium","Helvetica Neue",Helvetica,Arial,sans-serif; }
+  .wrap { max-width:1280px; margin:0 auto; padding:14px 16px 28px; position:relative; }
+  .tabs { display:flex; max-width:720px; margin:0 auto; border:1px solid var(--line); background:#f4f2f0; }
+  .tabs button { flex:1; padding:15px 8px; border:0; border-right:1px solid var(--line); background:none;
+                 font:inherit; font-size:17px; color:var(--ink); cursor:pointer; }
+  .tabs button:last-child { border-right:0; }
+  .tabs button.on { font-weight:700; background:#f9f7f6; }
+  .head { text-align:center; margin-top:26px; }
+  .head h1 { font-size:19px; margin:0 0 14px; font-weight:700; }
+  .legend { display:flex; justify-content:center; align-items:flex-start; gap:28px; }
+  .hint { text-align:center; color:#9a9a9a; font-size:15px; margin:16px 0 0; }
+  #mapbox { position:relative; margin-top:6px; }
+  svg#map { width:100%; height:auto; display:block; cursor:grab; }
+  svg#map:active { cursor:grabbing; }
+  .zoom { position:absolute; right:6px; top:0; display:flex; flex-direction:column;
+          border:1px solid var(--line); border-radius:3px; background:#fbfaf9; }
+  .zoom button { width:38px; height:38px; border:0; background:none; font-size:26px; cursor:pointer; color:#222; }
+  .zoom button + button { border-top:1px solid var(--line); color:#999; }
+  #tip { position:fixed; pointer-events:none; background:#fff; border:1px solid #ccc; padding:8px 10px;
+         font-size:13px; line-height:1.45; box-shadow:0 2px 8px rgba(0,0,0,.12); display:none; z-index:5; }
+  #tip b { font-size:14px; }
+  .lab { font-size:12px; pointer-events:none; text-anchor:middle; font-weight:500;
+         paint-order:stroke; stroke-width:2px; stroke-linejoin:round; }
+  .note { max-width:980px; margin:18px auto 0; color:var(--muted); font-size:12.5px; line-height:1.5; }
+  #err { color:#b00; text-align:center; padding:40px 0; display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tabs" id="tabs"></div>
+  <div class="head">
+    <h1 id="title"></h1>
+    <div class="legend"><svg id="legend" width="640" height="60"></svg></div>
+  </div>
+  <p class="hint">Double-click to zoom into the map.</p>
+  <div id="mapbox">
+    <svg id="map" viewBox="0 0 1200 620"></svg>
+    <div class="zoom"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">&minus;</button></div>
+    <div id="err">Couldn&rsquo;t load the world outlines. This page needs an internet connection (it loads D3 and the map shapes from a CDN).</div>
+  </div>
+  <div class="note">
+    <b>How to read this.</b> Vehicles per household is an estimate: (road motor vehicles &divide; population) &times; average household size.
+    &ldquo;Vehicles&rdquo; includes trucks and buses, so values overstate private cars. Years differ by country (vehicles 2012&ndash;2025, household size 2000&ndash;2023).
+    Grey = no data (Oman and Laos were excluded as unreliable).<br>
+    <b>Sources:</b> Wikipedia, &ldquo;List of countries and territories by motor vehicles per capita&rdquo; and &ldquo;List of countries by number of households&rdquo; (national statistics offices, UN, OICA).
+  </div>
+</div>
+<div id="tip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script>
+const DATA = [{"id":"554","name":"New Zealand","vph":2.35,"v1000":881,"hh":2.67},{"id":"840","name":"United States","vph":1.94,"v1000":778,"hh":2.49},{"id":"036","name":"Australia","vph":1.94,"v1000":776,"hh":2.5},{"id":"438","name":"Liechtenstein","vph":1.82,"v1000":786,"hh":2.32},{"id":"380","name":"Italy","vph":1.81,"v1000":753,"hh":2.4},{"id":"124","name":"Canada","vph":1.66,"v1000":677,"hh":2.45},{"id":"442","name":"Luxembourg","vph":1.97,"v1000":818,"hh":2.41},{"id":"392","name":"Japan","vph":1.51,"v1000":670,"hh":2.26},{"id":"246","name":"Finland","vph":1.56,"v1000":752,"hh":2.07},{"id":"196","name":"Cyprus","vph":1.5,"v1000":544,"hh":2.75},{"id":"044","name":"Bahamas","vph":2.22,"v1000":654,"hh":3.4},{"id":"233","name":"Estonia","vph":1.7,"v1000":740,"hh":2.3},{"id":"616","name":"Poland","vph":1.89,"v1000":671,"hh":2.81},{"id":"203","name":"Czech Republic","vph":1.59,"v1000":664,"hh":2.4},{"id":"826","name":"United Kingdom","vph":1.37,"v1000":603,"hh":2.27},{"id":"440","name":"Lithuania","vph":1.49,"v1000":643,"hh":2.32},{"id":"276","name":"Germany","vph":1.29,"v1000":627,"hh":2.05},{"id":"703","name":"Slovakia","vph":1.69,"v1000":603,"hh":2.8},{"id":"780","name":"Trinidad and Tobago","vph":1.91,"v1000":582,"hh":3.29},{"id":"250","name":"France","vph":1.49,"v1000":671,"hh":2.22},{"id":"300","name":"Greece","vph":1.35,"v1000":555,"hh":2.44},{"id":"470","name":"Malta","vph":2.35,"v1000":823,"hh":2.85},{"id":"040","name":"Austria","vph":1.29,"v1000":569,"hh":2.27},{"id":"620","name":"Portugal","vph":1.84,"v1000":691,"hh":2.66},{"id":"724","name":"Spain","vph":1.73,"v1000":642,"hh":2.69},{"id":"756","name":"Switzerland","vph":1.33,"v1000":603,"hh":2.21},{"id":"578","name":"Norway","vph":1.4,"v1000":629,"hh":2.22},{"id":"188","name":"Costa Rica","vph":1.78,"v1000":514,"hh":3.46},{"id":"056","name":"Belgium","vph":1.41,"v1000":599,"hh":2.36},{"id":"528","name":"Netherlands","vph":1.25,"v1000":562,"hh":2.23},{"id":"191","name":"Croatia","vph":1.48,"v1000":530,"hh":2.8},{"id":"214","name":"Dominican Republic","vph":1.78,"v1000":513,"hh":3.48},{"id":"705","name":"Slovenia","vph":1.43,"v1000":581,"hh":2.47},{"id":"410","name":"South Korea","vph":1.09,"v1000":501,"hh":2.18},{"id":"032","name":"Argentina","vph":1.61,"v1000":493,"hh":3.26},{"id":"100","name":"Bulgaria","vph":1.09,"v1000":466,"hh":2.34},{"id":"752","name":"Sweden","vph":1.18,"v1000":542,"hh":2.17},{"id":"372","name":"Ireland","vph":1.48,"v1000":536,"hh":2.77},{"id":"076","name":"Brazil","vph":1.53,"v1000":462,"hh":3.31},{"id":"348","name":"Hungary","vph":1.28,"v1000":492,"hh":2.6},{"id":"642","name":"Romania","vph":1.37,"v1000":477,"hh":2.88},{"id":"376","name":"Israel","vph":1.38,"v1000":439,"hh":3.14},{"id":"428","name":"Latvia","vph":1.19,"v1000":463,"hh":2.58},{"id":"499","name":"Montenegro","vph":1.26,"v1000":393,"hh":3.21},{"id":"268","name":"Georgia","vph":1.47,"v1000":441,"hh":3.34},{"id":"740","name":"Suriname","vph":1.55,"v1000":394,"hh":3.94},{"id":"792","name":"Turkey","vph":1.23,"v1000":390,"hh":3.14},{"id":"688","name":"Serbia","vph":1.04,"v1000":360,"hh":2.88},{"id":"643","name":"Russia","vph":0.94,"v1000":364,"hh":2.58},{"id":"498","name":"Moldova","vph":0.93,"v1000":323,"hh":2.89},{"id":"446","name":"Macao","vph":1.08,"v1000":353,"hh":3.07},{"id":"496","name":"Mongolia","vph":1.5,"v1000":347,"hh":4.32},{"id":"008","name":"Albania","vph":1.02,"v1000":309,"hh":3.3},{"id":"591","name":"Panama","vph":1.17,"v1000":320,"hh":3.67},{"id":"484","name":"Mexico","vph":1.17,"v1000":312,"hh":3.74},{"id":"152","name":"Chile","vph":1.12,"v1000":312,"hh":3.58},{"id":"051","name":"Armenia","vph":1.07,"v1000":303,"hh":3.54},{"id":"072","name":"Botswana","vph":1.03,"v1000":292,"hh":3.52},{"id":"170","name":"Colombia","vph":0.99,"v1000":280,"hh":3.53},{"id":"156","name":"China","vph":0.93,"v1000":331,"hh":2.8},{"id":"398","name":"Kazakhstan","vph":0.88,"v1000":250,"hh":3.5},{"id":"462","name":"Maldives","vph":1.35,"v1000":250,"hh":5.4},{"id":"430","name":"Liberia","vph":1.23,"v1000":248,"hh":4.95},{"id":"804","name":"Ukraine","vph":0.58,"v1000":237,"hh":2.46},{"id":"710","name":"South Africa","vph":0.7,"v1000":208,"hh":3.36},{"id":"388","name":"Jamaica","vph":0.62,"v1000":203,"hh":3.06},{"id":"417","name":"Kyrgyzstan","vph":0.84,"v1000":200,"hh":4.21},{"id":"320","name":"Guatemala","vph":0.96,"v1000":200,"hh":4.81},{"id":"364","name":"Iran","vph":0.64,"v1000":182,"hh":3.49},{"id":"604","name":"Peru","vph":0.68,"v1000":182,"hh":3.75},{"id":"340","name":"Honduras","vph":0.8,"v1000":180,"hh":4.47},{"id":"608","name":"Philippines","vph":0.76,"v1000":180,"hh":4.23},{"id":"400","name":"Jordan","vph":0.82,"v1000":173,"hh":4.72},{"id":"702","name":"Singapore","vph":0.57,"v1000":172,"hh":3.29},{"id":"328","name":"Guyana","vph":0.65,"v1000":171,"hh":3.8},{"id":"031","name":"Azerbaijan","vph":0.77,"v1000":169,"hh":4.55},{"id":"222","name":"El Salvador","vph":0.66,"v1000":163,"hh":4.07},{"id":"068","name":"Bolivia","vph":0.54,"v1000":153,"hh":3.53},{"id":"862","name":"Venezuela","vph":0.64,"v1000":149,"hh":4.33},{"id":"516","name":"Namibia","vph":0.71,"v1000":167,"hh":4.24},{"id":"218","name":"Ecuador","vph":0.54,"v1000":143,"hh":3.78},{"id":"242","name":"Fiji","vph":0.65,"v1000":142,"hh":4.57},{"id":"104","name":"Myanmar","vph":0.56,"v1000":132,"hh":4.22},{"id":"344","name":"Hong Kong","vph":0.35,"v1000":124,"hh":2.83},{"id":"586","name":"Pakistan","vph":0.82,"v1000":121,"hh":6.8},{"id":"504","name":"Morocco","vph":0.59,"v1000":113,"hh":5.24},{"id":"854","name":"Burkina Faso","vph":0.66,"v1000":112,"hh":5.92},{"id":"368","name":"Iraq","vph":0.86,"v1000":112,"hh":7.7},{"id":"360","name":"Indonesia","vph":0.32,"v1000":82,"hh":3.86},{"id":"716","name":"Zimbabwe","vph":0.37,"v1000":91,"hh":4.08},{"id":"860","name":"Uzbekistan","vph":0.46,"v1000":87,"hh":5.24},{"id":"818","name":"Egypt","vph":0.36,"v1000":87,"hh":4.13},{"id":"524","name":"Nepal","vph":0.36,"v1000":84,"hh":4.24},{"id":"270","name":"Gambia","vph":0.64,"v1000":78,"hh":8.23},{"id":"148","name":"Chad","vph":0.43,"v1000":74,"hh":5.78},{"id":"288","name":"Ghana","vph":0.25,"v1000":70,"hh":3.49},{"id":"404","name":"Kenya","vph":0.23,"v1000":62,"hh":3.64},{"id":"566","name":"Nigeria","vph":0.3,"v1000":62,"hh":4.9},{"id":"192","name":"Cuba","vph":0.18,"v1000":56,"hh":3.14},{"id":"004","name":"Afghanistan","vph":0.44,"v1000":55,"hh":8.04},{"id":"762","name":"Tajikistan","vph":0.31,"v1000":50,"hh":6.27},{"id":"174","name":"Comoros","vph":0.25,"v1000":47,"hh":5.37},{"id":"894","name":"Zambia","vph":0.23,"v1000":45,"hh":5.13},{"id":"704","name":"Vietnam","vph":0.16,"v1000":43,"hh":3.78},{"id":"800","name":"Uganda","vph":0.19,"v1000":41,"hh":4.53},{"id":"694","name":"Sierra Leone","vph":0.24,"v1000":41,"hh":5.9},{"id":"834","name":"Tanzania","vph":0.19,"v1000":40,"hh":4.85},{"id":"204","name":"Benin","vph":0.21,"v1000":40,"hh":5.19},{"id":"356","name":"India","vph":0.17,"v1000":38,"hh":4.57},{"id":"384","name":"Ivory Coast","vph":0.18,"v1000":35,"hh":5.09},{"id":"050","name":"Bangladesh","vph":0.15,"v1000":34,"hh":4.47},{"id":"120","name":"Cameroon","vph":0.16,"v1000":32,"hh":4.99},{"id":"686","name":"Senegal","vph":0.28,"v1000":32,"hh":8.66},{"id":"508","name":"Mozambique","vph":0.11,"v1000":26,"hh":4.37},{"id":"324","name":"Guinea","vph":0.13,"v1000":22,"hh":6.25},{"id":"116","name":"Cambodia","vph":0.1,"v1000":21,"hh":4.61},{"id":"562","name":"Niger","vph":0.12,"v1000":21,"hh":5.92},{"id":"646","name":"Rwanda","vph":0.09,"v1000":20,"hh":4.26},{"id":"466","name":"Mali","vph":0.11,"v1000":19,"hh":5.81},{"id":"598","name":"Papua New Guinea","vph":0.06,"v1000":11,"hh":5.43},{"id":"231","name":"Ethiopia","vph":0.05,"v1000":10,"hh":4.61},{"id":"108","name":"Burundi","vph":0.05,"v1000":10,"hh":4.83},{"id":"450","name":"Madagascar","vph":0.05,"v1000":9,"hh":4.95},{"id":"768","name":"Togo","vph":0.04,"v1000":8,"hh":4.55},{"id":"140","name":"Central African Republic","vph":0.04,"v1000":8,"hh":4.91},{"id":"408","name":"North Korea","vph":0.0,"v1000":1,"hh":3.93},{"id":"729","name":"Sudan","vph":0.17,"v1000":30,"hh":5.59},{"id":"882","name":"Samoa","vph":0.84,"v1000":124,"hh":6.75}];
+const byId = new Map(DATA.map(d => [d.id, d]));
+const COLORS = ["#c27f6e", "#d9ae94", "#efe1d4", "#bfd3cf", "#85a89e", "#46746a"];
+const NODATA = "#efecea";
+const f2 = d3.format(".2f"), f1 = d3.format(".1f"), f0 = d3.format(",.0f");
+
+const METRICS = [
+  { key:"vph",   tab:"Vehicles per household",    title:"Estimated vehicles per household",
+    bins:[0.1, 0.3, 0.6, 1.0, 1.5], tick:f1, val:f2 },
+  { key:"v1000", tab:"Vehicles per 1,000 people", title:"Road motor vehicles per 1,000 people",
+    bins:[25, 100, 250, 450, 650], tick:f0, val:f0 },
+  { key:"hh",    tab:"People per household",      title:"Average household size (people per household)",
+    bins:[2.5, 3.5, 4.5, 5.5, 6.5], tick:f1, val:f2 }
+];
+let cur = METRICS[0];
+
+// labels: id (ISO numeric), text, optional [lon,lat] override for countries with far-flung territories
+const LABELS = [
+ ["124","Canada",[-100,59]],["840","United States",[-98,39]],["484","Mexico",[-102,24]],["076","Brazil"],
+ ["032","Argentina",[-65,-36]],["170","Colombia"],["604","Peru"],["152","Chile",[-71,-33]],
+ ["643","Russia",[95,62]],["156","China",[103,35]],["356","India"],["036","Australia"],["566","Nigeria"],
+ ["818","Egypt"],["231","Ethiopia"],["404","Kenya"],["180","D.R. Congo"],["710","South Africa"],
+ ["276","Germany"],["250","France",[2.5,46.6]],["724","Spain",[-3.7,40.2]],["380","Italy",[12.5,42.8]],
+ ["826","U.K.",[-2.3,54]],["792","Turkey"],["364","Iran"],["586","Pakistan"],["392","Japan",[138,37]],
+ ["360","Indonesia",[114,-1]],["704","Vietnam",[106,16]],["608","Philippines",[122,12]],
+ ["554","New Zealand",[172,-42]],["682","Saudi Arabia"],["012","Algeria"],["434","Libya"],["716","Zimbabwe"],
+ ["372","Ireland"],["578","Norway",[9,62]],["752","Sweden",[16,62]],["246","Finland"],["616","Poland"],["804","Ukraine"]
+];
+
+const W = 1200, H = 620;
+const svg = d3.select("#map");
+const g = svg.append("g");
+const tip = d3.select("#tip");
+
+function colorFor(m, d) { return d ? d3.scaleThreshold().domain(m.bins).range(COLORS)(d[m.key]) : NODATA; }
+
+function drawLegend(m) {
+  const L = d3.select("#legend"); L.selectAll("*").remove();
+  const x0 = 10, w = 70, y = 2, h = 18;
+  COLORS.forEach((c, i) => L.append("rect").attr("x", x0 + i*w).attr("y", y).attr("width", w).attr("height", h).attr("fill", c));
+  m.bins.forEach((b, i) => {
+    const x = x0 + (i+1)*w;
+    L.append("line").attr("x1", x).attr("x2", x).attr("y1", y).attr("y2", y + h + 2).attr("stroke", "#111");
+    L.append("text").attr("x", x).attr("y", y + h + 24).attr("text-anchor", "middle").attr("font-size", 17).text(m.tick(b));
+  });
+  L.append("rect").attr("x", x0 + 6*w + 30).attr("y", y).attr("width", 105).attr("height", h).attr("fill", NODATA);
+  L.append("text").attr("x", x0 + 6*w + 82).attr("y", y + h + 24).attr("text-anchor", "middle").attr("font-size", 17).text("No data");
+}
+
+function setMetric(m) {
+  cur = m;
+  d3.select("#title").text(m.title);
+  d3.selectAll("#tabs button").classed("on", (_, i) => METRICS[i] === m);
+  drawLegend(m);
+  g.selectAll("path.c").transition().duration(350).attr("fill", f => colorFor(m, byId.get(f.id)));
+  g.selectAll("text.lab").each(function (l) {
+    const fill = colorFor(m, byId.get(l.id));
+    const light = d3.lab(fill).l > 68;
+    d3.select(this).attr("fill", light ? "#4a4a4a" : "#fff").attr("stroke", light ? "rgba(255,255,255,.0)" : "rgba(0,0,0,.18)");
+  });
+}
+
+d3.select("#tabs").selectAll("button").data(METRICS).join("button").text(d => d.tab).on("click", (_, m) => setMetric(m));
+
+d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json").then(world => {
+  const feats = topojson.feature(world, world.objects.countries).features.filter(f => f.id !== "010"); // drop Antarctica
+  const proj = d3.geoNaturalEarth1().fitExtent([[0, 8], [W, H - 8]], { type: "FeatureCollection", features: feats });
+  const path = d3.geoPath(proj);
+
+  g.selectAll("path.c").data(feats).join("path").attr("class", "c").attr("d", path)
+    .attr("fill", NODATA).attr("stroke", "#fff").attr("stroke-width", 0.6).attr("vector-effect", "non-scaling-stroke")
+    .on("mousemove", (ev, f) => {
+      const d = byId.get(f.id);
+      const name = d ? d.name : (f.properties.name || "");
+      tip.style("display", "block").style("left", (ev.clientX + 14) + "px").style("top", (ev.clientY + 14) + "px")
+        .html(d ? `<b>${name}</b><br>Vehicles per household: <b>${f2(d.vph)}</b><br>Vehicles per 1,000 people: ${f0(d.v1000)}<br>People per household: ${f2(d.hh)}`
+                : `<b>${name}</b><br>No data`);
+    })
+    .on("mouseleave", () => tip.style("display", "none"));
+
+  const byFeat = new Map(feats.map(f => [f.id, f]));
+  const labs = LABELS.map(([id, text, ll]) => {
+    const f = byFeat.get(id); if (!f) return null;
+    const p = ll ? proj(ll) : path.centroid(f);
+    return { id, text, x: p[0], y: p[1] };
+  }).filter(Boolean);
+  g.selectAll("text.lab").data(labs).join("text").attr("class", "lab").attr("x", d => d.x).attr("y", d => d.y).text(d => d.text);
+
+  const zoom = d3.zoom().scaleExtent([1, 10]).translateExtent([[0, 0], [W, H]]).extent([[0, 0], [W, H]])
+    .on("zoom", ev => {
+      g.attr("transform", ev.transform);
+      g.selectAll("text.lab").style("font-size", (12 / ev.transform.k) + "px").style("stroke-width", (2 / ev.transform.k) + "px");
+    });
+  svg.call(zoom);
+  d3.select("#zin").on("click", () => svg.transition().duration(250).call(zoom.scaleBy, 1.7));
+  d3.select("#zout").on("click", () => svg.transition().duration(250).call(zoom.scaleBy, 1 / 1.7));
+  setMetric(METRICS[0]);
+}).catch(() => { d3.select("#err").style("display", "block"); setMetric(METRICS[0]); });
+</script>
+</body>
+</html>
